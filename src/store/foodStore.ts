@@ -3,6 +3,13 @@ import { persist } from 'zustand/middleware';
 import { FoodItem, AppSettings, FoodCategory } from '@/types/food';
 import { generateId, getTodayString, calculateExpiryDate } from '@/utils/foodUtils';
 
+export interface ExportData {
+  version: string;
+  exportDate: string;
+  foods: FoodItem[];
+  settings: AppSettings;
+}
+
 interface FoodState {
   foods: FoodItem[];
   settings: AppSettings;
@@ -13,6 +20,8 @@ interface FoodState {
   updateSettings: (settings: Partial<AppSettings>) => void;
   getFoodById: (id: string) => FoodItem | undefined;
   importData: (foods: FoodItem[]) => void;
+  importFullData: (data: ExportData) => void;
+  exportFullData: () => ExportData;
   clearAllData: () => void;
 }
 
@@ -220,6 +229,20 @@ export const useFoodStore = create<FoodState>()(
 
       importData: (foods) => {
         set({ foods });
+      },
+
+      importFullData: (data) => {
+        set({ foods: data.foods, settings: data.settings });
+      },
+
+      exportFullData: () => {
+        const state = get();
+        return {
+          version: '1.0.0',
+          exportDate: new Date().toISOString(),
+          foods: state.foods,
+          settings: state.settings,
+        };
       },
 
       clearAllData: () => {

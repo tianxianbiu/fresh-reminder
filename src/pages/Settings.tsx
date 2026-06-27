@@ -9,20 +9,21 @@ import {
   Info,
   Leaf,
 } from 'lucide-react';
-import { useFoodStore } from '@/store/foodStore';
+import { useFoodStore, type ExportData } from '@/store/foodStore';
 import type { FoodItem } from '@/types/food';
 
 export default function Settings() {
-  const { settings, updateSettings, foods, importData, clearAllData } = useFoodStore();
+  const { settings, updateSettings, foods, importData, importFullData, exportFullData, clearAllData } = useFoodStore();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleExport = () => {
-    const dataStr = JSON.stringify(foods, null, 2);
+    const data = exportFullData();
+    const dataStr = JSON.stringify(data, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `鲜尝提醒-食品数据-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `鲜尝提醒-备份-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -36,14 +37,20 @@ export default function Settings() {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string) as FoodItem[];
-        if (Array.isArray(data)) {
-          if (confirm(`确定要导入 ${data.length} 条食品数据吗？这将覆盖当前所有现有数据。`)) {
-            importData(data);
+        const data = JSON.parse(event.target?.result as string);
+        
+        if (data && data.version && Array.isArray(data.foods) && data.settings) {
+          if (confirm(`确定要导入备份数据吗？\n\n食品：${data.foods.length} 样\n导出时间：${new Date(data.exportDate).toLocaleString('zh-CN')}\n\n这将覆盖当前所有数据。`)) {
+            importFullData(data as ExportData);
+            alert('导入成功！');
+          }
+        } else if (Array.isArray(data)) {
+          if (confirm(`确定要导入 ${data.length} 条食品数据吗？这将覆盖当前所有食品数据。`)) {
+            importData(data as FoodItem[]);
             alert('导入成功！');
           }
         } else {
-          alert('文件格式不正确，请选择正确的JSON文件。');
+          alert('文件格式不正确，请选择正确的备份文件。');
         }
       } catch {
         alert('文件解析失败，请确保是有效的JSON文件。');
@@ -157,8 +164,8 @@ export default function Settings() {
         <div className="space-y-3">
           <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
             <div>
-              <p className="font-medium text-gray-700">导出数据</p>
-              <p className="text-sm text-gray-500">将所有食品数据导出为JSON文件</p>
+              <p className="font-medium text-gray-700">导出备份</p>
+              <p className="text-sm text-gray-500">导出所有食品数据和设置为备份文件</p>
             </div>
             <button
               onClick={handleExport}
@@ -171,8 +178,8 @@ export default function Settings() {
 
           <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
             <div>
-              <p className="font-medium text-gray-700">导入数据</p>
-              <p className="text-sm text-gray-500">从JSON文件导入食品数据</p>
+              <p className="font-medium text-gray-700">导入备份</p>
+              <p className="text-sm text-gray-500">从备份文件恢复食品数据和设置</p>
             </div>
             <label className="btn-secondary flex items-center gap-2 text-sm cursor-pointer">
               <Upload className="w-4 h-4" />
@@ -244,7 +251,7 @@ export default function Settings() {
 
         <div className="text-center text-xs text-gray-400 pt-2">
           <p>数据保存在你的浏览器本地</p>
-          <p>请定期备份数据以防丢失</p>
+          <p>建议定期导出备份，以防数据丢失</p>
         </div>
       </div>
     </div>
