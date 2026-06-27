@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>鲜尝提醒 - 食品保质期管理</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥬</text></svg>" />
+  
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac',
+              400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d',
+              800: '#166534', 900: '#14532d',
+            },
+            cream: { 50: '#fefdf8', 100: '#fef9e7', 200: '#fef0c3' },
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-out',
+            'slide-up': 'slideUp 0.4s ease-out',
+            'slide-down': 'slideDown 0.3s ease-out',
+            'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+            slideDown: { '0%': { opacity: '0', transform: 'translateY(-10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+            pulseSoft: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.6' } },
+          },
+          boxShadow: {
+            'soft': '0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+            'soft-lg': '0 8px 30px -4px rgba(0, 0, 0, 0.1), 0 4px 10px -4px rgba(0, 0, 0, 0.04)',
+          },
+        },
+      },
+    };
+  </script>
+  
+  <style>
+    body { background-color: #fefdf8; font-family: system-ui, -apple-system, sans-serif; }
+    .card { background: white; border-radius: 1rem; box-shadow: 0 2px 8px -2px rgba(0,0,0,0.08), 0 4px 20px -2px rgba(0,0,0,0.04); border: 1px solid rgba(243,244,246,0.5); }
+    .card-hover { transition: all 0.3s; }
+    .card-hover:hover { box-shadow: 0 8px 30px -4px rgba(0,0,0,0.1), 0 4px 10px -4px rgba(0,0,0,0.04); transform: translateY(-2px); }
+    .btn-primary { background: #22c55e; color: white; font-weight: 500; border-radius: 0.75rem; padding: 0.625rem 1.25rem; transition: all 0.2s; box-shadow: 0 2px 8px -2px rgba(0,0,0,0.08); }
+    .btn-primary:hover { background: #16a34a; }
+    .btn-secondary { background: white; color: #374151; font-weight: 500; border-radius: 0.75rem; padding: 0.625rem 1.25rem; border: 1px solid #e5e7eb; transition: all 0.2s; }
+    .btn-secondary:hover { border-color: #d1d5db; background: #f9fafb; }
+    .input-base { width: 100%; padding: 0.625rem 1rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; transition: all 0.2s; outline: none; background: white; color: #1f2937; }
+    .input-base:focus { border-color: #4ade80; box-shadow: 0 0 0 3px rgba(220,252,231,0.5); }
+    .badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    .nav-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 0.75rem; color: #4b5563; font-weight: 500; transition: all 0.2s; }
+    .nav-link:hover { background: #f3f4f6; color: #111827; }
+    .nav-link.active { background: #f0fdf4; color: #15803d; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+    .animate-slide-up { animation: slideUp 0.4s ease-out; opacity: 0; animation-fill-mode: forwards; }
+    .animate-slide-down { animation: slideDown 0.3s ease-out; }
+    .animate-pulse-soft { animation: pulseSoft 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, createContext, useContext, useRef } = React;
+
+    // ========== 常量 ==========
+    const FOOD_CATEGORIES = ['蔬菜水果', '肉禽蛋', '海鲜水产', '乳制品', '粮油调味', '零食饮料', '冷冻食品', '方便速食', '其他'];
+    const CATEGORY_EMOJIS = { '蔬菜水果': '🥬', '肉禽蛋': '🥩', '海鲜水产': '🦐', '乳制品': '🥛', '粮油调味': '🍚', '零食饮料': '🍪', '冷冻食品': '🧊', '方便速食': '🍜', '其他': '📦' };
+    const CATEGORY_COLORS = {
+      '蔬菜水果': 'bg-green-100 text-green-700 border-green-200',
+      '肉禽蛋': 'bg-red-100 text-red-700 border-red-200',
+      '海鲜水产': 'bg-blue-100 text-blue-700 border-blue-200',
+      '乳制品': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+      '粮油调味': 'bg-amber-100 text-amber-700 border-amber-200',
+      '零食饮料': 'bg-pink-100 text-pink-700 border-pink-200',
+      '冷冻食品': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+      '方便速食': 'bg-orange-100 text-orange-700 border-orange-200',
+      '其他': 'bg-gray-100 text-gray-700 border-gray-200',
+    };
+    const COMMON_UNITS = ['个', '包', '袋', '瓶', '盒', '斤', '克', '千克', '升', '毫升'];
+    const STORAGE_KEY = 'fresh-reminder-data-v1';
+
+    // ========== 工具函数 ==========
+    function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 9); }
+    function formatDate(date) {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    function formatDateDisplay(date) {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    }
+    function calculateExpiryDate(startDate, days) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + days);
+      return formatDate(d);
+    }
+    function getDaysUntilExpiry(expiryDate) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const exp = new Date(expiryDate); exp.setHours(0, 0, 0, 0);
+      return Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    function getFoodStatus(food, warningDays) {
+      let eff = food.expiryDate;
+      if (food.isOpened && food.openedDate && food.openedShelfLifeDays) {
+        eff = calculateExpiryDate(food.openedDate, food.openedShelfLifeDays);
+      }
+      const days = getDaysUntilExpiry(eff);
+      if (days <= 0) return 'expired';
+      if (days <= warningDays) return 'expiring-soon';
+      return 'fresh';
+    }
+    function getExpiryDisplayText(food, warningDays) {
+      let eff = food.expiryDate;
+      if (food.isOpened && food.openedDate && food.openedShelfLifeDays) {
+        eff = calculateExpiryDate(food.openedDate, food.openedShelfLifeDays);
+      }
+      const days = getDaysUntilExpiry(eff);
+      if (days < 0) return `已过期 ${Math.abs(days)} 天`;
+      if (days === 0) return '今天到期';
+      if (days === 1) return '明天到期';
+      return `还剩 ${days} 天`;
+    }
+    function getStatusCount(foods, warningDays) {
+      let f = 0, es = 0, e = 0;
+      foods.forEach(food => {
+        const s = getFoodStatus(food, warningDays);
+        if (s === 'fresh') f++;
+        else if (s === 'expiring-soon') es++;
+        else e++;
+      });
+      return { fresh: f, expiringSoon: es, expired: e };
+    }
+    function getCategoryCount(foods) {
+      const c = {};
+      foods.forEach(f => { c[f.category] = (c[f.category] || 0) + 1; });
+      return c;
+    }
+    function sortFoods(foods, field, order, warningDays) {
+      const s = [...foods];
+      if (field === 'expiryDate') {
+        s.sort((a, b) => {
+          const da = getDaysUntilExpiry(a.expiryDate), db = getDaysUntilExpiry(b.expiryDate);
+          return order === 'asc' ? da - db : db - da;
+        });
+      } else if (field === 'name') {
+        s.sort((a, b) => {
+          const c = a.name.localeCompare(b.name, 'zh-CN');
+          return order === 'asc' ? c : -c;
+        });
+      } else if (field === 'purchaseDate') {
+        s.sort((a, b) => {
+          const da = new Date(a.purchaseDate).getTime(), db = new Date(b.purchaseDate).getTime();
+          return order === 'asc' ? da - db : db - da;
+        });
+      } else if (field === 'createdAt') {
+        s.sort((a, b) => {
+          const da = new Date(a.createdAt).getTime(), db = new Date(b.createdAt).getTime();
+          return order === 'asc' ? da - db : db - da;
+        });
+      }
+      return s;
+    }
+    function filterFoods(foods, search, category, status, warningDays) {
+      return foods.filter(food => {
+        if (search && !food.name.toLowerCase().includes(search.toLowerCase())) return false;
+        if (category !== 'all' && food.category !== category) return false;
+        if (status !== 'all' && getFoodStatus(food, warningDays) !== status) return false;
+        return true;
+      });
+    }
+    function getTodayString() { return formatDate(new Date()); }
+    function getGreeting() {
+      const h = new Date().getHours();
+      if (h < 6) return '凌晨好'; if (h < 9) return '早上好';
+      if (h < 12) return '上午好'; if (h < 14) return '中午好';
+      if (h < 17) return '下午好'; if (h < 19) return '傍晚好';
+      return '晚上好';
+    }
+    function getMockFoods() {
+      const today = getTodayString();
+      return [
+        { id: generateId(), name: '有机牛奶', category: '乳制品', purchaseDate: today, productionDate: today, shelfLifeDays: 7, expiryDate: calculateExpiryDate(today, 7), quantity: 2, unit: '盒', isOpened: false, notes: '冷藏保存', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '土鸡蛋', category: '肉禽蛋', purchaseDate: today, productionDate: today, shelfLifeDays: 30, expiryDate: calculateExpiryDate(today, 30), quantity: 20, unit: '个', isOpened: true, openedDate: today, openedShelfLifeDays: 20, notes: '放在冰箱冷藏', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '新鲜菠菜', category: '蔬菜水果', purchaseDate: today, shelfLifeDays: 3, expiryDate: calculateExpiryDate(today, 3), quantity: 1, unit: '把', isOpened: false, notes: '尽快食用', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '全麦面包', category: '零食饮料', purchaseDate: today, productionDate: today, shelfLifeDays: 5, expiryDate: calculateExpiryDate(today, 5), quantity: 1, unit: '袋', isOpened: true, openedDate: today, openedShelfLifeDays: 3, notes: '早餐用', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '冷冻水饺', category: '冷冻食品', purchaseDate: today, productionDate: today, shelfLifeDays: 180, expiryDate: calculateExpiryDate(today, 180), quantity: 2, unit: '袋', isOpened: false, notes: '猪肉白菜馅', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '苹果', category: '蔬菜水果', purchaseDate: today, shelfLifeDays: 14, expiryDate: calculateExpiryDate(today, 14), quantity: 6, unit: '个', isOpened: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '生抽酱油', category: '粮油调味', purchaseDate: today, productionDate: today, shelfLifeDays: 540, expiryDate: calculateExpiryDate(today, 540), quantity: 1, unit: '瓶', isOpened: true, openedDate: today, openedShelfLifeDays: 180, notes: '海天特级', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: '三文鱼', category: '海鲜水产', purchaseDate: today, shelfLifeDays: 2, expiryDate: calculateExpiryDate(today, 2), quantity: 1, unit: '斤', isOpened: false, notes: '冰鲜，尽快吃', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      ];
+    }
+
+    // ========== 状态管理 ==========
+    const FoodContext = createContext(null);
+    function FoodProvider({ children }) {
+      const [foods, setFoods] = useState(() => {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const data = JSON.parse(saved);
+            if (data && Array.isArray(data.foods)) return data.foods;
+          }
+        } catch (e) {}
+        return getMockFoods();
+      });
+      const [settings, setSettings] = useState(() => {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const data = JSON.parse(saved);
+            if (data && data.settings) return data.settings;
+          }
+        } catch (e) {}
+        return { warningDays: 3, notificationsEnabled: true };
+      });
+
+      useEffect(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ foods, settings })); } catch (e) {}
+      }, [foods, settings]);
+
+      const addFood = (fd) => {
+        const now = new Date().toISOString();
+        const nf = { ...fd, id: generateId(), expiryDate: fd.expiryDate || calculateExpiryDate(fd.productionDate || fd.purchaseDate, fd.shelfLifeDays), createdAt: now, updatedAt: now };
+        setFoods(prev => [nf, ...prev]);
+      };
+      const updateFood = (id, upd) => {
+        setFoods(prev => prev.map(f => f.id === id ? { ...f, ...upd, updatedAt: new Date().toISOString() } : f));
+      };
+      const deleteFood = (id) => setFoods(prev => prev.filter(f => f.id !== id));
+      const toggleOpened = (id) => {
+        setFoods(prev => prev.map(f => {
+          if (f.id === id) {
+            const o = !f.isOpened;
+            return { ...f, isOpened: o, openedDate: o ? getTodayString() : undefined, updatedAt: new Date().toISOString() };
+          }
+          return f;
+        }));
+      };
+      const updateSettings = (s) => setSettings(prev => ({ ...prev, ...s }));
+      const getFoodById = (id) => foods.find(f => f.id === id);
+      const importData = (nf) => setFoods(nf);
+      const clearAllData = () => setFoods([]);
+
+      return (
+        <FoodContext.Provider value={{ foods, settings, addFood, updateFood, deleteFood, toggleOpened, updateSettings, getFoodById, importData, clearAllData }}>
+          {children}
+        </FoodContext.Provider>
+      );
+    }
+    function useFoodStore() {
+      const ctx = useContext(FoodContext);
+      if (!ctx) throw new Error('useFoodStore error');
+      return ctx;
+    }
+
+    // ========== 图标组件 ==========
+    function Icon({ name, className = '' }) {
+      const ref = useRef(null);
+      useEffect(() => {
+        if (ref.current && window.lucide) {
+          lucide.createIcons({
+            attrs: { class: className },
+            nameAttr: 'data-lucide',
+            root: ref.current.parentElement,
+          });
+        }
+      }, [name, className]);
+      return <i ref={ref} data-lucide={name} className={className}></i>;
+    }
+
+    // ========== 路由管理 ==========
+    const RouterContext = createContext(null);
+    function RouterProvider({ children }) {
+      const [page, setPage] = useState('dashboard');
+      const [foodId, setFoodId] = useState(null);
+      const [editMode, setEditMode] = useState(false);
+
+      const navigate = (p, fid = null) => {
+        if (p === 'detail' && fid) {
+          setFoodId(fid); setEditMode(false); setPage('detail');
+        } else if (p === 'edit' && fid) {
+          setFoodId(fid); setEditMode(true); setPage('detail');
+        } else {
+          setPage(p);
+        }
+        window.scrollTo(0, 0);
+      };
+
+      return (
+        <RouterContext.Provider value={{ page, foodId, editMode, navigate }}>
+          {children}
+        </RouterContext.Provider>
+      );
+    }
+    function useRouter() { return useContext(RouterContext); }
+
+    // ========== 布局组件 ==========
+    function Layout({ children }) {
+      const { page, navigate } = useRouter();
+      const { foods, settings } = useFoodStore();
+      const { expired, expiringSoon } = getStatusCount(foods, settings.warningDays);
+      const alertCount = expired + expiringSoon;
+
+      const navItems = [
+        { id: 'dashboard', label: '仪表盘', icon: 'layout-dashboard' },
+        { id: 'inventory', label: '食品库存', icon: 'package' },
+        { id: 'add', label: '添加食品', icon: 'plus-circle' },
+        { id: 'settings', label: '设置', icon: 'settings' },
+      ];
+
+      const isActive = (id) => {
+        if (id === 'dashboard') return page === 'dashboard';
+        if (id === 'inventory') return page === 'inventory' || page === 'detail';
+        return page === id;
+      };
+
+      return (
+        <div className="min-h-screen flex">
+          <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 sticky top-0 h-screen">
+            <div className="p-6 border-b border-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-soft text-xl">🥬</div>
+                <div>
+                  <h1 className="font-bold text-lg text-gray-800">鲜尝提醒</h1>
+                  <p className="text-xs text-gray-400">别再浪费食物</p>
+                </div>
+              </div>
+            </div>
+            <nav className="flex-1 p-4 space-y-1">
+              {navItems.map(item => (
+                <button key={item.id} onClick={() => navigate(item.id)}
+                  className={`nav-link w-full text-left ${isActive(item.id) ? 'active' : ''}`}>
+                  <Icon name={item.icon} className={`w-5 h-5 ${isActive(item.id) ? 'text-brand-600' : 'text-gray-400'}`} />
+                  <span>{item.label}</span>
+                  {item.id === 'dashboard' && alertCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                      {alertCount > 9 ? '9+' : alertCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+            <div className="p-4 border-t border-gray-50">
+              <div className="bg-gradient-to-r from-brand-50 to-green-50 rounded-xl p-4">
+                <p className="text-sm font-medium text-brand-700">小贴士 💡</p>
+                <p className="text-xs text-brand-600 mt-1 leading-relaxed">定期检查冰箱，把即将过期的食物放在最显眼的位置！</p>
+              </div>
+            </div>
+          </aside>
+
+          <main className="flex-1 min-h-screen pb-20 md:pb-0">
+            <div className="max-w-6xl mx-auto py-6 md:py-8 px-4 md:px-8">{children}</div>
+          </main>
+
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-2 py-2 z-50">
+            <div className="flex justify-around items-center">
+              {navItems.map(item => (
+                <button key={item.id} onClick={() => navigate(item.id)}
+                  className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors relative ${isActive(item.id) ? 'text-brand-600' : 'text-gray-400'}`}>
+                  <Icon name={item.icon} className="w-6 h-6" />
+                  <span className="text-xs font-medium">{item.label}</span>
+                  {item.id === 'dashboard' && alertCount > 0 && (
+                    <span className="absolute top-0 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {alertCount > 9 ? '9+' : alertCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    // ========== 统计卡片 ==========
+    function StatCard({ title, value, icon, color, subtitle, delay = 0 }) {
+      const colorMap = {
+        green: 'from-green-400 to-emerald-500',
+        orange: 'from-orange-400 to-amber-500',
+        red: 'from-red-400 to-rose-500',
+        blue: 'from-blue-400 to-cyan-500',
+        purple: 'from-purple-400 to-violet-500',
+      };
+      return (
+        <div className="card overflow-hidden animate-slide-up" style={{ animationDelay: `${delay}ms` }}>
+          <div className={`bg-gradient-to-br ${colorMap[color]} p-5 text-white relative overflow-hidden`}>
+            <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10"></div>
+            <div className="absolute -right-8 -bottom-8 w-32 h-32 rounded-full bg-white/5"></div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-3">
+                <Icon name={icon} className="w-5 h-5 text-white" />
+              </div>
+              <p className="text-white/80 text-sm font-medium">{title}</p>
+              <p className="text-3xl font-bold mt-1">{value}</p>
+              {subtitle && <p className="text-white/70 text-xs mt-1">{subtitle}</p>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== 食品卡片 ==========
+    function FoodCard({ food, index = 0 }) {
+      const { navigate } = useRouter();
+      const { settings, toggleOpened, deleteFood } = useFoodStore();
+      const status = getFoodStatus(food, settings.warningDays);
+      const expiryText = getExpiryDisplayText(food, settings.warningDays);
+      const catColor = CATEGORY_COLORS[food.category];
+      const catEmoji = CATEGORY_EMOJIS[food.category];
+
+      const statusBg = status === 'fresh' ? 'bg-green-500' : status === 'expiring-soon' ? 'bg-orange-500' : 'bg-red-500';
+      const statusText = status === 'fresh' ? '新鲜' : status === 'expiring-soon' ? '即将过期' : '已过期';
+      const statusColorCls = status === 'fresh' ? 'text-green-600 bg-green-50 border-green-200' : status === 'expiring-soon' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-red-600 bg-red-50 border-red-200';
+      const statusIconCls = status === 'fresh' ? 'text-gray-400' : status === 'expiring-soon' ? 'text-orange-500' : 'text-red-500';
+
+      const handleDelete = (e) => {
+        e.stopPropagation();
+        if (confirm(`确定要删除「${food.name}」吗？`)) deleteFood(food.id);
+      };
+      const handleToggle = (e) => { e.stopPropagation(); toggleOpened(food.id); };
+
+      const progress = Math.max(0, Math.min(100, (() => {
+        const total = food.shelfLifeDays;
+        const passed = total - Math.max(0, Math.ceil((new Date(food.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
+        return (passed / total) * 100;
+      })()));
+
+      return (
+        <div className="card card-hover cursor-pointer overflow-hidden relative animate-slide-up"
+          style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
+          onClick={() => navigate('detail', food.id)}>
+          <div className={`absolute top-3 right-3 z-10 ${status === 'expired' ? 'animate-pulse-soft' : ''}`}>
+            <span className={`badge ${statusColorCls} border`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${statusBg}`}></span>
+              {statusText}
+            </span>
+          </div>
+          <div className="p-5">
+            <div className="flex items-start gap-3 mb-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${catColor} border`}>{catEmoji}</div>
+              <div className="flex-1 min-w-0 pt-1">
+                <h3 className="font-semibold text-gray-800 truncate pr-16">{food.name}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{food.category}</p>
+              </div>
+            </div>
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Icon name="clock" className={`w-4 h-4 ${statusIconCls}`} />
+                <span className={`text-sm font-medium ${status === 'expired' ? 'text-red-600' : status === 'expiring-soon' ? 'text-orange-600' : 'text-gray-600'}`}>{expiryText}</span>
+              </div>
+              <p className="text-xs text-gray-400 ml-6">过期日期：{formatDateDisplay(food.expiryDate)}</p>
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 text-gray-500">
+                  <Icon name="package-open" className="w-4 h-4" />
+                  <span className="text-sm font-medium">{food.quantity} {food.unit}</span>
+                </div>
+                {food.isOpened && <span className="badge bg-amber-50 text-amber-600 border border-amber-100">已开封</span>}
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={handleToggle} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600" title={food.isOpened ? '标记为未开封' : '标记为已开封'}>
+                  <Icon name={food.isOpened ? 'toggle-right' : 'toggle-left'} className={`w-5 h-5 ${food.isOpened ? 'text-brand-500' : ''}`} />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); navigate('edit', food.id); }} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-brand-600" title="编辑">
+                  <Icon name="edit-2" className="w-4 h-4" />
+                </button>
+                <button onClick={handleDelete} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-500" title="删除">
+                  <Icon name="trash-2" className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="h-1 bg-gray-100">
+            <div className={`h-full transition-all duration-500 ${statusBg}`} style={{ width: `${progress}%` }}></div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== 仪表盘 ==========
+    function Dashboard() {
+      const { navigate } = useRouter();
+      const { foods, settings } = useFoodStore();
+      const { fresh, expiringSoon, expired } = getStatusCount(foods, settings.warningDays);
+      const catCounts = getCategoryCount(foods);
+      const totalCats = Object.values(catCounts).filter(c => c > 0).length;
+      const sortedByExp = sortFoods(foods, 'expiryDate', 'asc', settings.warningDays);
+      const expiringFoods = sortedByExp.filter(f => getFoodStatus(f, settings.warningDays) !== 'fresh');
+      const topExpiring = expiringFoods.slice(0, 6);
+      const catsWithItems = FOOD_CATEGORIES.filter(c => (catCounts[c] || 0) > 0);
+
+      return (
+        <div className="space-y-8">
+          <div className="animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-gray-500 text-sm">{formatDateDisplay(new Date())}</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-1">{getGreeting()}！👋</h1>
+                <p className="text-gray-500 mt-1">
+                  你的冰箱里有 <span className="font-semibold text-brand-600">{foods.length}</span> 样食物
+                  {expiringSoon > 0 && <span>，其中 <span className="font-semibold text-orange-500">{expiringSoon}</span> 样即将过期</span>}
+                  {expired > 0 && <span>，<span className="font-semibold text-red-500">{expired}</span> 样已过期</span>}
+                </p>
+              </div>
+              <button onClick={() => navigate('add')} className="btn-primary flex items-center gap-2 self-start sm:self-auto">
+                <Icon name="plus" className="w-5 h-5" />
+                添加食品
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard title="全部食品" value={foods.length} icon="package" color="blue" subtitle="样" delay={0} />
+            <StatCard title="新鲜" value={fresh} icon="check-circle" color="green" subtitle="样" delay={50} />
+            <StatCard title="即将过期" value={expiringSoon} icon="clock" color="orange" subtitle={`${settings.warningDays}天内`} delay={100} />
+            <StatCard title="已过期" value={expired} icon="alert-triangle" color="red" subtitle="样" delay={150} />
+          </div>
+
+          {topExpiring.length > 0 && (
+            <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <Icon name="alert-triangle" className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-800">需要注意</h2>
+                  {expiringSoon > 0 && <span className="badge bg-orange-100 text-orange-600">{expiringSoon} 样即将过期</span>}
+                  {expired > 0 && <span className="badge bg-red-100 text-red-600">{expired} 样已过期</span>}
+                </div>
+                <button onClick={() => navigate('inventory')} className="text-brand-600 hover:text-brand-700 text-sm font-medium flex items-center gap-1 transition-colors">
+                  查看全部 <Icon name="chevron-right" className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {topExpiring.map((f, i) => <FoodCard key={f.id} food={f} index={i} />)}
+              </div>
+            </div>
+          )}
+
+          <div className="animate-slide-up" style={{ animationDelay: '300ms' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <Icon name="sparkles" className="w-4 h-4 text-purple-600" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800">分类概览</h2>
+                <span className="badge bg-gray-100 text-gray-600">{totalCats} 个分类</span>
+              </div>
+              <button onClick={() => navigate('inventory')} className="text-brand-600 hover:text-brand-700 text-sm font-medium flex items-center gap-1 transition-colors">
+                全部库存 <Icon name="chevron-right" className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="card p-5">
+              {catsWithItems.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-3">
+                  {catsWithItems.map(cat => (
+                    <button key={cat} onClick={() => navigate('inventory')}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all hover:scale-105 hover:shadow-md ${CATEGORY_COLORS[cat]}`}>
+                      <span className="text-2xl">{CATEGORY_EMOJIS[cat]}</span>
+                      <span className="text-xs font-medium">{cat}</span>
+                      <span className="text-xs font-bold opacity-80">{catCounts[cat] || 0}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <Icon name="package" className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>还没有添加任何食品</p>
+                  <button onClick={() => navigate('add')} className="btn-primary mt-4 text-sm">添加第一个食品</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {foods.length > 0 && (
+            <div className="animate-slide-up" style={{ animationDelay: '350ms' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Icon name="package" className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-800">全部食品</h2>
+                </div>
+                <button onClick={() => navigate('inventory')} className="text-brand-600 hover:text-brand-700 text-sm font-medium flex items-center gap-1 transition-colors">
+                  查看更多 <Icon name="chevron-right" className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sortedByExp.slice(0, 4).map((f, i) => <FoodCard key={f.id} food={f} index={i} />)}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ========== 库存页面 ==========
+    function Inventory() {
+      const { navigate } = useRouter();
+      const { foods, settings } = useFoodStore();
+      const [search, setSearch] = useState('');
+      const [category, setCategory] = useState('all');
+      const [status, setStatus] = useState('all');
+      const [sortField, setSortField] = useState('expiryDate');
+      const [sortOrder, setSortOrder] = useState('asc');
+      const [showFilters, setShowFilters] = useState(false);
+
+      const statusOpts = [
+        { v: 'all', l: '全部', c: 'bg-gray-100 text-gray-700 hover:bg-gray-200' },
+        { v: 'fresh', l: '新鲜', c: 'bg-green-100 text-green-700 hover:bg-green-200' },
+        { v: 'expiring-soon', l: '即将过期', c: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
+        { v: 'expired', l: '已过期', c: 'bg-red-100 text-red-700 hover:bg-red-200' },
+      ];
+      const sortOpts = [
+        { v: 'expiryDate', l: '过期时间' },
+        { v: 'purchaseDate', l: '购买时间' },
+        { v: 'name', l: '名称' },
+        { v: 'createdAt', l: '添加时间' },
+      ];
+
+      const filtered = filterFoods(foods, search, category, status, settings.warningDays);
+      const sorted = sortFoods(filtered, sortField, sortOrder, settings.warningDays);
+      const hasFilters = search || category !== 'all' || status !== 'all';
+
+      const toggleSort = (f) => {
+        if (sortField === f) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        else { setSortField(f); setSortOrder('asc'); }
+      };
+      const clearFilters = () => { setSearch(''); setCategory('all'); setStatus('all'); };
+
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">食品库存</h1>
+              <p className="text-gray-500 text-sm mt-1">
+                共 <span className="font-semibold text-gray-700">{sorted.length}</span> 样食品
+                {hasFilters && <span className="text-gray-400">（已筛选）</span>}
+              </p>
+            </div>
+            <button onClick={() => navigate('add')} className="btn-primary flex items-center gap-2 self-start sm:self-auto">
+              <Icon name="plus" className="w-5 h-5" />
+              添加食品
+            </button>
+          </div>
+
+          <div className="space-y-4 animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input type="text" placeholder="搜索食品名称..." value={search}
+                  onChange={(e) => setSearch(e.target.value)} className="input-base pl-12 pr-10" />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 transition-colors">
+                    <Icon name="x" className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
+              </div>
+              <button onClick={() => setShowFilters(!showFilters)}
+                className={`btn-secondary flex items-center gap-2 ${hasFilters ? 'ring-2 ring-brand-300' : ''}`}>
+                <Icon name="sliders-horizontal" className="w-5 h-5" />
+                <span className="hidden sm:inline">筛选</span>
+                {hasFilters && <span className="w-2 h-2 bg-brand-500 rounded-full"></span>}
+              </button>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {statusOpts.map(o => (
+                <button key={o.v} onClick={() => setStatus(o.v)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    status === o.v ? o.c + ' ring-2 ring-offset-1' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  }`}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
+
+            {showFilters && (
+              <div className="card p-5 animate-slide-down space-y-5">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Icon name="filter" className="w-4 h-4 text-gray-500" />
+                      <span className="font-medium text-gray-700">食品分类</span>
+                    </div>
+                    {hasFilters && (
+                      <button onClick={clearFilters} className="text-sm text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1">
+                        <Icon name="x" className="w-4 h-4" />清除筛选
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setCategory('all')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        category === 'all' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}>全部分类</button>
+                    {FOOD_CATEGORIES.map(cat => (
+                      <button key={cat} onClick={() => setCategory(cat)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+                          category === cat ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}>
+                        <span>{CATEGORY_EMOJIS[cat]}</span>{cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="arrow-up-down" className="w-4 h-4 text-gray-500" />
+                    <span className="font-medium text-gray-700">排序方式</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {sortOpts.map(o => (
+                      <button key={o.v} onClick={() => toggleSort(o.v)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+                          sortField === o.v ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}>
+                        {o.l}
+                        {sortField === o.v && <span className="text-xs">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="animate-slide-up" style={{ animationDelay: '150ms' }}>
+            {sorted.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {sorted.map((f, i) => <FoodCard key={f.id} food={f} index={i} />)}
+              </div>
+            ) : (
+              <div className="card p-12 text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Icon name="package" className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-700 mb-2">
+                  {hasFilters ? '没有找到匹配的食品' : '还没有添加任何食品'}
+                </h3>
+                <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                  {hasFilters ? '试试调整筛选条件，或者清除筛选查看全部食品' : '点击下方按钮，开始记录你家的食品吧！'}
+                </p>
+                {hasFilters ? (
+                  <button onClick={clearFilters} className="btn-secondary">清除筛选条件</button>
+                ) : (
+                  <button onClick={() => navigate('add')} className="btn-primary inline-flex items-center gap-2">
+                    <Icon name="plus" className="w-5 h-5" />添加第一个食品
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ========== 添加食品 ==========
+    function AddFood() {
+      const { navigate } = useRouter();
+      const { addFood } = useFoodStore();
+      const [name, setName] = useState('');
+      const [category, setCategory] = useState('蔬菜水果');
+      const [purchaseDate, setPurchaseDate] = useState(getTodayString());
+      const [productionDate, setProductionDate] = useState('');
+      const [shelfLifeDays, setShelfLifeDays] = useState(7);
+      const [quantity, setQuantity] = useState(1);
+      const [unit, setUnit] = useState('个');
+      const [isOpened, setIsOpened] = useState(false);
+      const [openedShelfLifeDays, setOpenedShelfLifeDays] = useState(3);
+      const [notes, setNotes] = useState('');
+
+      const presets = {
+        '牛奶': { category: '乳制品', shelfLifeDays: 7, unit: '盒' },
+        '鸡蛋': { category: '肉禽蛋', shelfLifeDays: 30, unit: '个' },
+        '面包': { category: '零食饮料', shelfLifeDays: 5, unit: '袋' },
+        '苹果': { category: '蔬菜水果', shelfLifeDays: 14, unit: '斤' },
+        '青菜': { category: '蔬菜水果', shelfLifeDays: 3, unit: '把' },
+        '酸奶': { category: '乳制品', shelfLifeDays: 21, unit: '杯' },
+      };
+
+      const handleQuick = (n) => {
+        const p = presets[n];
+        if (p) { setName(n); setCategory(p.category); setShelfLifeDays(p.shelfLifeDays); setUnit(p.unit); }
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!name.trim()) { alert('请输入食品名称'); return; }
+        const base = productionDate || purchaseDate;
+        addFood({
+          name: name.trim(), category, purchaseDate,
+          productionDate: productionDate || undefined,
+          shelfLifeDays, expiryDate: calculateExpiryDate(base, shelfLifeDays),
+          quantity, unit, isOpened,
+          openedDate: isOpened ? getTodayString() : undefined,
+          openedShelfLifeDays: isOpened ? openedShelfLifeDays : undefined,
+          notes: notes.trim() || undefined,
+        });
+        navigate('inventory');
+      };
+
+      const previewExp = calculateExpiryDate(productionDate || purchaseDate, shelfLifeDays);
+
+      return (
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center gap-4 mb-6 animate-fade-in">
+            <button onClick={() => navigate('inventory')} className="p-2 rounded-xl hover:bg-white transition-colors text-gray-600">
+              <Icon name="arrow-left" className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">添加食品</h1>
+              <p className="text-gray-500 text-sm">记录新购入的食品信息</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="card p-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
+              <div className="flex items-center gap-2 mb-4">
+                <Icon name="sparkles" className="w-4 h-4 text-amber-500" />
+                <span className="font-medium text-gray-700">快捷录入</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(presets).map(p => (
+                  <button key={p} type="button" onClick={() => handleQuick(p)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-sm font-medium hover:bg-amber-100 transition-colors border border-amber-100">
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="card p-5 space-y-5 animate-slide-up" style={{ animationDelay: '100ms' }}>
+              <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                <Icon name="package" className="w-5 h-5 text-brand-500" />基本信息
+              </h2>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">食品名称 <span className="text-red-500">*</span></label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：有机牛奶" className="input-base" autoFocus />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">食品分类</label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {FOOD_CATEGORIES.map(cat => (
+                    <button key={cat} type="button" onClick={() => setCategory(cat)}
+                      className={`flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
+                        category === cat ? `${CATEGORY_COLORS[cat]} border-2 ring-2 ring-offset-1` : 'bg-gray-50 border-gray-100 hover:bg-gray-100'
+                      }`}>
+                      <span className="text-xl">{CATEGORY_EMOJIS[cat]}</span>
+                      <span className="text-xs font-medium">{cat}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">数量</label>
+                  <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(Number(e.target.value) || 1)} className="input-base" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">单位</label>
+                  <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-base appearance-none cursor-pointer">
+                    {COMMON_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="card p-5 space-y-5 animate-slide-up" style={{ animationDelay: '150ms' }}>
+              <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                <Icon name="calendar" className="w-5 h-5 text-brand-500" />保质期信息
+              </h2>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">购买日期</label>
+                <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className="input-base" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">生产日期 <span className="text-gray-400 text-xs font-normal">（可选）</span></label>
+                <input type="date" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} className="input-base" />
+                <p className="text-xs text-gray-400 mt-1">不填写则以购买日期开始计算保质期</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">保质期（天）</label>
+                <div className="flex items-center gap-3">
+                  <input type="range" min="1" max="365" value={shelfLifeDays}
+                    onChange={(e) => setShelfLifeDays(Number(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-500" />
+                  <input type="number" min="1" value={shelfLifeDays}
+                    onChange={(e) => setShelfLifeDays(Number(e.target.value) || 1)}
+                    className="input-base w-24 text-center" />
+                  <span className="text-gray-500 text-sm w-6">天</span>
+                </div>
+              </div>
+              <div className="bg-brand-50 rounded-xl p-4 border border-brand-100">
+                <p className="text-sm text-brand-700">
+                  <span className="font-medium">预计过期日期：</span>
+                  <span className="font-bold text-lg ml-1">{previewExp}</span>
+                </p>
+              </div>
+              <div className="border-t border-gray-100 pt-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-medium text-gray-700">是否已开封</span>
+                  <button type="button" onClick={() => setIsOpened(!isOpened)} className="text-gray-500">
+                    <Icon name={isOpened ? 'toggle-right' : 'toggle-left'} className={`w-8 h-8 ${isOpened ? 'text-brand-500' : 'text-gray-300'}`} />
+                  </button>
+                </div>
+                {isOpened && (
+                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 space-y-3 animate-slide-down">
+                    <p className="text-sm text-amber-700">开封后保质期会缩短，请设置开封后的保质期</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-amber-700 whitespace-nowrap">开封后保质期</span>
+                      <input type="number" min="1" value={openedShelfLifeDays}
+                        onChange={(e) => setOpenedShelfLifeDays(Number(e.target.value) || 1)}
+                        className="input-base flex-1" />
+                      <span className="text-amber-700 text-sm">天</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card p-5 space-y-4 animate-slide-up" style={{ animationDelay: '200ms' }}>
+              <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                <Icon name="file-text" className="w-5 h-5 text-brand-500" />备注
+              </h2>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+                placeholder="例如：冷藏保存、给孩子买的、需要尽快食用..."
+                rows={3} className="input-base resize-none" />
+            </div>
+
+            <div className="flex gap-3 pb-6 animate-slide-up" style={{ animationDelay: '250ms' }}>
+              <button type="button" onClick={() => navigate('inventory')} className="btn-secondary flex-1">取消</button>
+              <button type="submit" className="btn-primary flex-1 flex items-center justify-center gap-2">
+                <Icon name="save" className="w-5 h-5" />保存食品
+              </button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    // ========== 食品详情 ==========
+    function FoodDetailPage() {
+      const { navigate, foodId, editMode } = useRouter();
+      const { getFoodById, updateFood, deleteFood, toggleOpened, settings } = useFoodStore();
+      const [editing, setEditing] = useState(editMode);
+      const [name, setName] = useState('');
+      const [category, setCategory] = useState('蔬菜水果');
+      const [purchaseDate, setPurchaseDate] = useState(getTodayString());
+      const [productionDate, setProductionDate] = useState('');
+      const [shelfLifeDays, setShelfLifeDays] = useState(7);
+      const [quantity, setQuantity] = useState(1);
+      const [unit, setUnit] = useState('个');
+      const [isOpened, setIsOpened] = useState(false);
+      const [openedShelfLifeDays, setOpenedShelfLifeDays] = useState(3);
+      const [notes, setNotes] = useState('');
+
+      const food = foodId ? getFoodById(foodId) : null;
+
+      useEffect(() => {
+        if (food) {
+          setName(food.name);
+          setCategory(food.category);
+          setPurchaseDate(food.purchaseDate);
+          setProductionDate(food.productionDate || '');
+          setShelfLifeDays(food.shelfLifeDays);
+          setQuantity(food.quantity);
+          setUnit(food.unit);
+          setIsOpened(food.isOpened);
+          setOpenedShelfLifeDays(food.openedShelfLifeDays || 3);
+          setNotes(food.notes || '');
+        }
+      }, [food]);
+
+      if (!food) {
+        return (
+          <div className="max-w-2xl mx-auto">
+            <div className="card p-12 text-center">
+              <Icon name="package" className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <h2 className="text-xl font-bold text-gray-700 mb-2">食品不存在</h2>
+              <p className="text-gray-500 mb-6">该食品可能已被删除</p>
+              <button onClick={() => navigate('inventory')} className="btn-primary">返回库存列表</button>
+            </div>
+          </div>
+        );
+      }
+
+      const status = getFoodStatus(food, settings.warningDays);
+      const expiryText = getExpiryDisplayText(food, settings.warningDays);
+      const catColor = CATEGORY_COLORS[food.category];
+      const catEmoji = CATEGORY_EMOJIS[food.category];
+      const statusBg = status === 'fresh' ? 'bg-green-500' : status === 'expiring-soon' ? 'bg-orange-500' : 'bg-red-500';
+      const statusText = status === 'fresh' ? '新鲜' : status === 'expiring-soon' ? '即将过期' : '已过期';
+      const statusColorCls = status === 'fresh' ? 'text-green-600 bg-green-50 border-green-200' : status === 'expiring-soon' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-red-600 bg-red-50 border-red-200';
+      const statusIconCls = status === 'fresh' ? 'text-brand-500' : status === 'expiring-soon' ? 'text-orange-500' : 'text-red-500';
+      const previewExp = calculateExpiryDate(productionDate || purchaseDate, shelfLifeDays);
+
+      const handleSave = () => {
+        if (!name.trim()) { alert('请输入食品名称'); return; }
+        const base = productionDate || purchaseDate;
+        updateFood(food.id, {
+          name: name.trim(), category, purchaseDate,
+          productionDate: productionDate || undefined,
+          shelfLifeDays, expiryDate: calculateExpiryDate(base, shelfLifeDays),
+          quantity, unit, isOpened,
+          openedDate: isOpened && !food.isOpened ? getTodayString() : food.openedDate,
+          openedShelfLifeDays: isOpened ? openedShelfLifeDays : undefined,
+          notes: notes.trim() || undefined,
+        });
+        setEditing(false);
+      };
+
+      const handleDelete = () => {
+        if (confirm(`确定要删除「${food.name}」吗？此操作不可恢复。`)) {
+          deleteFood(food.id);
+          navigate('inventory');
+        }
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto pb-8">
+          <div className="flex items-center justify-between mb-6 animate-fade-in">
+            <div className="flex items-center gap-4">
+              <button onClick={() => navigate('inventory')} className="p-2 rounded-xl hover:bg-white transition-colors text-gray-600">
+                <Icon name="arrow-left" className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800">{editing ? '编辑食品' : '食品详情'}</h1>
+                <p className="text-gray-500 text-sm">{food.category}</p>
+              </div>
+            </div>
+            {!editing && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditing(true)} className="btn-secondary flex items-center gap-2">
+                  <Icon name="edit-2" className="w-4 h-4" />编辑
+                </button>
+                <button onClick={handleDelete} className="p-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-colors">
+                  <Icon name="trash-2" className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className={`card p-6 mb-6 animate-slide-up ${status === 'expired' ? 'border-red-200' : ''}`}
+            style={{ animationDelay: '50ms' }}>
+            <div className="flex items-start gap-4">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl ${catColor} border`}>{catEmoji}</div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-800">{food.name}</h2>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className={`badge ${statusColorCls} border`}>
+                    <span className={`w-2 h-2 rounded-full ${statusBg} ${status !== 'fresh' ? 'animate-pulse' : ''}`}></span>
+                    {statusText}
+                  </span>
+                  {food.isOpened && <span className="badge bg-amber-50 text-amber-600 border border-amber-200">已开封</span>}
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <div className="flex items-center gap-3">
+                <Icon name="clock" className={`w-6 h-6 ${statusIconCls}`} />
+                <div>
+                  <p className={`text-lg font-bold ${status === 'expired' ? 'text-red-600' : status === 'expiring-soon' ? 'text-orange-600' : 'text-gray-800'}`}>{expiryText}</p>
+                  <p className="text-sm text-gray-500">过期日期：{formatDateDisplay(food.expiryDate)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {editing ? (
+            <div className="space-y-6">
+              <div className="card p-5 space-y-5 animate-slide-up" style={{ animationDelay: '100ms' }}>
+                <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                  <Icon name="package" className="w-5 h-5 text-brand-500" />基本信息
+                </h2>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">食品名称 <span className="text-red-500">*</span></label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-base" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">食品分类</label>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    {FOOD_CATEGORIES.map(cat => (
+                      <button key={cat} type="button" onClick={() => setCategory(cat)}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
+                          category === cat ? `${CATEGORY_COLORS[cat]} border-2` : 'bg-gray-50 border-gray-100 hover:bg-gray-100'
+                        }`}>
+                        <span className="text-xl">{CATEGORY_EMOJIS[cat]}</span>
+                        <span className="text-xs font-medium">{cat}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">数量</label>
+                    <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(Number(e.target.value) || 1)} className="input-base" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">单位</label>
+                    <select value={unit} onChange={(e) => setUnit(e.target.value)} className="input-base appearance-none cursor-pointer">
+                      {COMMON_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-5 space-y-5 animate-slide-up" style={{ animationDelay: '150ms' }}>
+                <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                  <Icon name="calendar" className="w-5 h-5 text-brand-500" />保质期信息
+                </h2>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">购买日期</label>
+                  <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className="input-base" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">生产日期 <span className="text-gray-400 text-xs font-normal">（可选）</span></label>
+                  <input type="date" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} className="input-base" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">保质期（天）</label>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min="1" max="365" value={shelfLifeDays}
+                      onChange={(e) => setShelfLifeDays(Number(e.target.value))}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-500" />
+                    <input type="number" min="1" value={shelfLifeDays}
+                      onChange={(e) => setShelfLifeDays(Number(e.target.value) || 1)}
+                      className="input-base w-24 text-center" />
+                    <span className="text-gray-500 text-sm w-6">天</span>
+                  </div>
+                </div>
+                <div className="bg-brand-50 rounded-xl p-4 border border-brand-100">
+                  <p className="text-sm text-brand-700">
+                    <span className="font-medium">预计过期日期：</span>
+                    <span className="font-bold text-lg ml-1">{previewExp}</span>
+                  </p>
+                </div>
+                <div className="border-t border-gray-100 pt-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-medium text-gray-700">是否已开封</span>
+                    <button type="button" onClick={() => setIsOpened(!isOpened)} className="text-gray-500">
+                      <Icon name={isOpened ? 'toggle-right' : 'toggle-left'} className={`w-8 h-8 ${isOpened ? 'text-brand-500' : 'text-gray-300'}`} />
+                    </button>
+                  </div>
+                  {isOpened && (
+                    <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 space-y-3 animate-slide-down">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-amber-700 whitespace-nowrap">开封后保质期</span>
+                        <input type="number" min="1" value={openedShelfLifeDays}
+                          onChange={(e) => setOpenedShelfLifeDays(Number(e.target.value) || 1)}
+                          className="input-base flex-1" />
+                        <span className="text-amber-700 text-sm">天</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="card p-5 space-y-4 animate-slide-up" style={{ animationDelay: '200ms' }}>
+                <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                  <Icon name="file-text" className="w-5 h-5 text-brand-500" />备注
+                </h2>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="input-base resize-none" />
+              </div>
+
+              <div className="flex gap-3 animate-slide-up" style={{ animationDelay: '250ms' }}>
+                <button onClick={() => setEditing(false)} className="btn-secondary flex-1 flex items-center justify-center gap-2">
+                  <Icon name="x" className="w-4 h-4" />取消
+                </button>
+                <button onClick={handleSave} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                  <Icon name="save" className="w-5 h-5" />保存修改
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="card p-5 space-y-4 animate-slide-up" style={{ animationDelay: '100ms' }}>
+                <h2 className="font-semibold text-gray-800">详细信息</h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-500 flex items-center gap-2"><Icon name="hash" className="w-4 h-4" />数量</span>
+                    <span className="font-medium text-gray-800">{food.quantity} {food.unit}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-500 flex items-center gap-2"><Icon name="calendar" className="w-4 h-4" />购买日期</span>
+                    <span className="font-medium text-gray-800">{formatDateDisplay(food.purchaseDate)}</span>
+                  </div>
+                  {food.productionDate && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-gray-500 flex items-center gap-2"><Icon name="calendar" className="w-4 h-4" />生产日期</span>
+                      <span className="font-medium text-gray-800">{formatDateDisplay(food.productionDate)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-500">保质期</span>
+                    <span className="font-medium text-gray-800">{food.shelfLifeDays} 天</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-500 flex items-center gap-2"><Icon name="toggle-right" className="w-4 h-4" />开封状态</span>
+                    <button onClick={() => toggleOpened(food.id)} className="text-brand-600 hover:text-brand-700 font-medium text-sm flex items-center gap-1">
+                      {food.isOpened ? '已开封' : '未开封'}<span className="text-xs text-gray-400">（点击切换）</span>
+                    </button>
+                  </div>
+                  {food.isOpened && food.openedDate && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-gray-500">开封日期</span>
+                      <span className="font-medium text-gray-800">{formatDateDisplay(food.openedDate)}</span>
+                    </div>
+                  )}
+                  {food.isOpened && food.openedShelfLifeDays && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-gray-500">开封后保质期</span>
+                      <span className="font-medium text-amber-600">{food.openedShelfLifeDays} 天</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {food.notes && (
+                <div className="card p-5 animate-slide-up" style={{ animationDelay: '150ms' }}>
+                  <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <Icon name="file-text" className="w-5 h-5 text-brand-500" />备注
+                  </h2>
+                  <p className="text-gray-600 leading-relaxed">{food.notes}</p>
+                </div>
+              )}
+
+              <div className="text-center text-xs text-gray-400 animate-fade-in" style={{ animationDelay: '200ms' }}>
+                <p>添加于 {new Date(food.createdAt).toLocaleString('zh-CN')}</p>
+                {food.updatedAt !== food.createdAt && <p>最后更新于 {new Date(food.updatedAt).toLocaleString('zh-CN')}</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ========== 设置页面 ==========
+    function Settings() {
+      const { navigate } = useRouter();
+      const { settings, updateSettings, foods, importData, clearAllData } = useFoodStore();
+      const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+      const handleExport = () => {
+        const dataStr = JSON.stringify(foods, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `鲜尝提醒-食品数据-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+
+      const handleImport = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = JSON.parse(evt.target?.result);
+            if (Array.isArray(data)) {
+              if (confirm(`确定要导入 ${data.length} 条食品数据吗？这将覆盖当前所有现有数据。`)) {
+                importData(data);
+                alert('导入成功！');
+              }
+            } else { alert('文件格式不正确，请选择正确的JSON文件。'); }
+          } catch { alert('文件解析失败，请确保是有效的JSON文件。'); }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="animate-fade-in">
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-100 flex items-center justify-center">
+                <Icon name="settings" className="w-5 h-5 text-brand-600" />
+              </div>
+              设置
+            </h1>
+            <p className="text-gray-500 text-sm mt-2 ml-13">个性化你的食品管理偏好设置</p>
+          </div>
+
+          <div className="card p-5 space-y-5 animate-slide-up" style={{ animationDelay: '50ms' }}>
+            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Icon name="bell" className="w-5 h-5 text-brand-500" />过期提醒
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <p className="font-medium text-gray-700">提前提醒天数</p>
+                <p className="text-sm text-gray-500">在食品过期前多少天开始提醒</p>
+                <div className="flex items-center gap-4 mt-3">
+                  <input type="range" min="1" max="14" value={settings.warningDays}
+                    onChange={(e) => updateSettings({ warningDays: Number(e.target.value) })}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-500" />
+                  <div className="w-16 text-center">
+                    <span className="text-2xl font-bold text-brand-600">{settings.warningDays}</span>
+                    <span className="text-sm text-gray-500"> 天</span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>1天</span><span>14天</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-3 border-t border-gray-100">
+                <div>
+                  <p className="font-medium text-gray-700">浏览器通知</p>
+                  <p className="text-sm text-gray-500">{settings.notificationsEnabled ? '已启用浏览器桌面通知' : '未启用浏览器通知'}</p>
+                </div>
+                <button onClick={() => {
+                  if (!settings.notificationsEnabled) {
+                    if ('Notification' in window) {
+                      Notification.requestPermission().then(p => {
+                        if (p === 'granted') updateSettings({ notificationsEnabled: true });
+                      });
+                    }
+                  } else updateSettings({ notificationsEnabled: false });
+                }}
+                  className={`relative w-12 h-7 rounded-full transition-colors ${settings.notificationsEnabled ? 'bg-brand-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${settings.notificationsEnabled ? 'translate-x-5' : 'translate-x-0.5'}`}></div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-5 space-y-5 animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Icon name="clock" className="w-5 h-5 text-brand-500" />数据管理
+            </h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div>
+                  <p className="font-medium text-gray-700">导出数据</p>
+                  <p className="text-sm text-gray-500">将所有食品数据导出为JSON文件</p>
+                </div>
+                <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
+                  <Icon name="download" className="w-4 h-4" />导出
+                </button>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+                <div>
+                  <p className="font-medium text-gray-700">导入数据</p>
+                  <p className="text-sm text-gray-500">从JSON文件导入食品数据</p>
+                </div>
+                <label className="btn-secondary flex items-center gap-2 text-sm cursor-pointer">
+                  <Icon name="upload" className="w-4 h-4" />导入
+                  <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                </label>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-red-50 hover:bg-red-100 transition-colors">
+                <div>
+                  <p className="font-medium text-red-700">清空所有数据</p>
+                  <p className="text-sm text-red-500">删除所有食品数据，不可恢复</p>
+                </div>
+                {showClearConfirm ? (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowClearConfirm(false)} className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800">取消</button>
+                    <button onClick={() => { clearAllData(); setShowClearConfirm(false); }}
+                      className="px-3 py-1.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600">确认清空</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowClearConfirm(true)}
+                    className="flex items-center gap-2 text-red-600 hover:text-red-700 text-sm font-medium">
+                    <Icon name="trash-2" className="w-4 h-4" />清空
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-5 space-y-4 animate-slide-up" style={{ animationDelay: '150ms' }}>
+            <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Icon name="info" className="w-5 h-5 text-brand-500" />关于
+            </h2>
+            <div className="text-center py-4">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-soft-lg text-3xl">🥬</div>
+              <h3 className="text-xl font-bold text-gray-800">鲜尝提醒</h3>
+              <p className="text-gray-500 text-sm mt-1">别再浪费食物</p>
+              <p className="text-gray-400 text-xs mt-4">版本 1.0.0</p>
+            </div>
+            <div className="bg-brand-50 rounded-xl p-4 border border-brand-100">
+              <p className="text-sm text-brand-700 leading-relaxed">
+                💡 <strong>小贴士：</strong>定期检查你的食品库存，把即将过期的食物放在冰箱最显眼的位置，
+                这样你就不会忘记它们啦！减少食物浪费，从记录开始。
+              </p>
+            </div>
+            <div className="text-center text-xs text-gray-400 pt-2">
+              <p>数据保存在你的浏览器本地</p>
+              <p>请定期备份数据以防丢失</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========== 主应用 ==========
+    function App() {
+      const { page } = useRouter();
+
+      let PageComponent;
+      switch (page) {
+        case 'dashboard': PageComponent = Dashboard; break;
+        case 'inventory': PageComponent = Inventory; break;
+        case 'add': PageComponent = AddFood; break;
+        case 'settings': PageComponent = Settings; break;
+        case 'detail': PageComponent = FoodDetailPage; break;
+        default: PageComponent = Dashboard;
+      }
+
+      return (
+        <Layout>
+          <PageComponent />
+        </Layout>
+      );
+    }
+
+    // ========== 渲染 ==========
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <React.StrictMode>
+        <FoodProvider>
+          <RouterProvider>
+            <App />
+          </RouterProvider>
+        </FoodProvider>
+      </React.StrictMode>
+    );
+
+    // 初始化图标
+    setTimeout(() => {
+      if (window.lucide) lucide.createIcons();
+    }, 200);
+
+    // 定时刷新图标
+    setInterval(() => {
+      if (window.lucide) lucide.createIcons();
+    }, 1000);
+  </script>
+</body>
+</html>
